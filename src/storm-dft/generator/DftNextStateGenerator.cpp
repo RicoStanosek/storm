@@ -145,20 +145,54 @@ storm::generator::StateBehavior<ValueType, StateType> DftNextStateGenerator<Valu
 
             // Next failure due to BE failing on its own
             std::shared_ptr<storm::dft::storage::elements::DFTBE<ValueType> const> nextBE = iterFailable.asBE(mDft);
-            // Obtain successor state by propagating failure of BE
-            newState = createSuccessorState(this->state, nextBE);
 
-            auto [newStateId, shouldStop] = getNewStateId(newState, stateToIdCallback);
-            if (shouldStop) {
-                continue;
+            // Check if any parent is a RELAXED_SPARE gate with this BE as currently used child
+            bool hasRelaxedSpareParent = false;
+            std::shared_ptr<storm::dft::storage::elements::DFTRelaxedSpare<ValueType> const> relaxedSpareParent = nullptr;
+            for (auto const& parent : nextBE->parents()) {
+                if (parent->type() == storm::dft::storage::elements::DFTElementType::RELAXED_SPARE && this->state->uses(parent->id()) == nextBE->id()) {
+                    hasRelaxedSpareParent = true;
+                    relaxedSpareParent = std::static_pointer_cast<storm::dft::storage::elements::DFTRelaxedSpare<ValueType> const>(parent);
+                    break;
+                }
             }
-            STORM_LOG_ASSERT(newStateId != this->state->getId(), "Self loop was added for " << newStateId << " and failure of " << nextBE->name());
 
-            // Set failure rate according to activation
-            ValueType rate = this->state->getBERate(nextBE->id());
-            STORM_LOG_ASSERT(!storm::utility::isZero(rate), "Failure rate should not be zero.");
-            choice.addProbability(newStateId, rate);
-            STORM_LOG_TRACE("Added transition to " << newStateId << " with failure rate " << rate);
+            if (hasRelaxedSpareParent) {
+                // Handle non-deterministic choice of relaxed spare gate
+
+                // First choice: try claiming new spare
+                DFTStatePointer claimState = createSuccessorStateRelaxedSpare(this->state, relaxedSpareParent, true);
+                auto [claimStateId, claimShouldStop] = getNewStateId(claimState, stateToIdCallback);
+                if (!claimShouldStop) {
+                    storm::generator::Choice<ValueType, StateType> claimChoice(0, false);
+                    claimChoice.addProbability(claimStateId, storm::utility::one<ValueType>());
+                    result.addChoice(std::move(claimChoice));
+                }
+
+                // Second choice: stay failed
+                DFTStatePointer failState = createSuccessorStateRelaxedSpare(this->state, relaxedSpareParent, false);
+                auto [failStateId, failShouldStop] = getNewStateId(failState, stateToIdCallback);
+                if (!failShouldStop) {
+                    storm::generator::Choice<ValueType, StateType> failChoice(1, false);
+                    failChoice.addProbability(failStateId, storm::utility::one<ValueType>());
+                    result.addChoice(std::move(failChoice));
+                }
+            } else {
+                // Normal BE failure handling
+                newState = createSuccessorState(this->state, nextBE);
+
+                auto [newStateId, shouldStop] = getNewStateId(newState, stateToIdCallback);
+                if (shouldStop) {
+                    continue;
+                }
+                STORM_LOG_ASSERT(newStateId != this->state->getId(), "Self loop was added for " << newStateId << " and failure of " << nextBE->name());
+
+                // Set failure rate according to activation
+                ValueType rate = this->state->getBERate(nextBE->id());
+                STORM_LOG_ASSERT(!storm::utility::isZero(rate), "Failure rate should not be zero.");
+                choice.addProbability(newStateId, rate);
+                STORM_LOG_TRACE("Added transition to " << newStateId << " with failure rate " << rate);
+            }
         }
 
     }  // end iteration of failing BE
@@ -212,8 +246,8 @@ typename DftNextStateGenerator<ValueType, StateType>::DFTStatePointer DftNextSta
 
     if (dependencySuccessful) {
         // Dependency was successful -> dependent BE fails
-        STORM_LOG_TRACE("With the successful triggering of PDEP " << dependency->name() << " [" << dependency->id() << "]" << " in "
-                                                                  << mDft.getStateString(origState));
+        STORM_LOG_TRACE("With the successful triggering of PDEP " << dependency->name() << " [" << dependency->id() << "]"
+                                                                  << " in " << mDft.getStateString(origState));
         newState->letDependencyTrigger(dependency, true);
         STORM_LOG_ASSERT(dependency->dependentEvents().size() == 1, "Dependency " << dependency->name() << " does not have unique dependent event.");
         STORM_LOG_ASSERT(dependency->dependentEvents().front()->isBasicElement(),
@@ -222,8 +256,8 @@ typename DftNextStateGenerator<ValueType, StateType>::DFTStatePointer DftNextSta
         return createSuccessorState(newState, trigger);
     } else {
         // Dependency was unsuccessful -> no BE fails
-        STORM_LOG_TRACE("With the unsuccessful triggering of PDEP " << dependency->name() << " [" << dependency->id() << "]" << " in "
-                                                                    << mDft.getStateString(origState));
+        STORM_LOG_TRACE("With the unsuccessful triggering of PDEP " << dependency->name() << " [" << dependency->id() << "]"
+                                                                    << " in " << mDft.getStateString(origState));
         newState->letDependencyTrigger(dependency, false);
         return newState;
     }
@@ -235,7 +269,8 @@ typename DftNextStateGenerator<ValueType, StateType>::DFTStatePointer DftNextSta
     // Construct new state as copy from original one
     DFTStatePointer newState = origState->copy();
 
-    STORM_LOG_TRACE("With the failure of " << be->name() << " [" << be->id() << "]" << " in " << mDft.getStateString(origState));
+    STORM_LOG_TRACE("With the failure of " << be->name() << " [" << be->id() << "]"
+                                           << " in " << mDft.getStateString(origState));
     newState->letBEFail(be);
 
     // Propagate
@@ -266,6 +301,57 @@ typename DftNextStateGenerator<ValueType, StateType>::DFTStatePointer DftNextSta
         newState->updateDontCareDependencies(be->id());
         newState->updateFailableInRestrictions(be->id());
     }
+    return newState;
+}
+
+template<typename ValueType, typename StateType>
+typename DftNextStateGenerator<ValueType, StateType>::DFTStatePointer DftNextStateGenerator<ValueType, StateType>::createSuccessorStateRelaxedSpare(
+    DFTStatePointer const origState, std::shared_ptr<storm::dft::storage::elements::DFTRelaxedSpare<ValueType> const> relaxedSpare,
+    bool tryClaimingSpare) const {
+    // Construct new state as copy from original one
+    DFTStatePointer newState = origState->copy();
+
+    // Create queues object that will be used for propagation
+    storm::dft::storage::DFTStateSpaceGenerationQueues<ValueType> queues;
+
+    if (tryClaimingSpare) {
+        // Try claiming a new spare - behavior like normal SPARE gate
+        size_t uses = origState->uses(relaxedSpare->id());
+        bool claimingSuccessful = newState->claimNew(relaxedSpare->id(), uses, relaxedSpare->children());
+        if (!claimingSuccessful) {
+            relaxedSpare->fail(*newState, queues);
+        }
+    } else {
+        // Directly fail without trying to claim new spare
+        relaxedSpare->fail(*newState, queues);
+    }
+
+    // Propagate failure to parents
+    for (DFTGatePointer parent : relaxedSpare->parents()) {
+        if (newState->isOperational(parent->id())) {
+            queues.propagateFailure(parent);
+        }
+    }
+
+    // Propagate failures through the fault tree
+    while (!queues.failurePropagationDone()) {
+        DFTGatePointer next = queues.nextFailurePropagation();
+        next->checkFails(*newState, queues);
+        newState->updateFailableDependencies(next->id());
+        newState->updateFailableInRestrictions(next->id());
+    }
+
+    // Check restrictions starting from the relaxed spare gate
+    for (auto const& restr : relaxedSpare->restrictions()) {
+        queues.checkRestrictionLater(restr);
+    }
+    while (!queues.restrictionChecksDone()) {
+        DFTRestrictionPointer next = queues.nextRestrictionCheck();
+        next->checkFails(*newState, queues);
+        newState->updateFailableDependencies(next->id());
+        newState->updateFailableInRestrictions(next->id());
+    }
+
     return newState;
 }
 

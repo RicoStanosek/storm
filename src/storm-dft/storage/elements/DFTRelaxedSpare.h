@@ -32,26 +32,18 @@ class DFTRelaxedSpare : public DFTSpare<ValueType> {
         return storm::dft::storage::elements::DFTElementType::RELAXED_SPARE;
     }
 
-    // void checkFails(storm::dft::storage::DFTState<ValueType>& state, storm::dft::storage::DFTStateSpaceGenerationQueues<ValueType>& queues) const override {
-    //     if (state.isOperational(this->mId)) {
-    //         size_t uses = state.uses(this->mId);
-    //         if (!state.isOperational(uses)) {
-    //             // Here is where we differ from normal SPARE:
-    //             // Instead of trying to claim and failing if unsuccessful,
-    //             // we create a non-deterministic choice between claiming and staying failed
-
-    //             // First choice: Try to claim new spare
-    //             bool claimingSuccessful = state.claimNew(this->mId, uses, this->children());
-    //             if (!claimingSuccessful) {
-    //                 this->fail(state, queues);
-    //             }
-
-    //             // Second choice: Immediately fail without trying to claim
-    //             // This is handled by the NextStateGenerator which will create a second successor state
-    //             // where we just fail without claiming
-    //         }
-    //     }
-    // }
+    void checkFails(storm::dft::storage::DFTState<ValueType>& state, storm::dft::storage::DFTStateSpaceGenerationQueues<ValueType>& queues) const override {
+        if (state.isOperational(this->id())) {
+            size_t uses = state.uses(this->id());
+            if (!state.isOperational(uses)) {
+                // Try to claim new spare - just like normal SPARE gate
+                bool claimingSuccessful = state.claimNew(this->id(), uses, this->children());
+                if (!claimingSuccessful) {
+                    this->fail(state, queues);
+                }
+            }
+        }
+    }
 };
 
 }  // namespace elements

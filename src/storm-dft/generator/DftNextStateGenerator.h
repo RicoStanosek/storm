@@ -54,6 +54,13 @@ class DftNextStateGenerator {
      */
     DFTStatePointer createInitialState() const;
 
+    /*
+     * Todo
+     */
+    DFTStatePointer createSuccessorStateRelaxedSpare(DFTStatePointer const origState,
+                                                     std::shared_ptr<storm::dft::storage::elements::DFTRelaxedSpare<ValueType> const> relaxedSpare,
+                                                     bool tryClaimingSpare) const;
+
     /*!
      * Create successor state from given state by letting the given BE fail next.
      *
