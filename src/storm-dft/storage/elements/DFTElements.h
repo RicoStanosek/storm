@@ -15,6 +15,7 @@
 #include "storm-dft/storage/elements/DFTPand.h"
 #include "storm-dft/storage/elements/DFTPor.h"
 #include "storm-dft/storage/elements/DFTSpare.h"
+#include "storm-dft/storage/elements/DFTRelaxedSpare.h"
 #include "storm-dft/storage/elements/DFTVot.h"
 
 #include "storm-dft/storage/elements/DFTDependency.h"
