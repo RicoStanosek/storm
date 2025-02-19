@@ -267,6 +267,11 @@ void DFTBuilder<ValueType>::addSpareGate(std::string const& name, std::vector<st
 }
 
 template<typename ValueType>
+void DFTBuilder<ValueType>::addRelaxedSpareGate(std::string const& name, std::vector<std::string> const& children) {
+    addGate(std::make_shared<storm::dft::storage::elements::DFTRelaxedSpare<ValueType>>(0, name), children);
+}
+
+template<typename ValueType>
 void DFTBuilder<ValueType>::addDependency(DFTDependencyPointer dependency, std::vector<std::string> const& children) {
     STORM_LOG_THROW(children.size() > 1, storm::exceptions::WrongFormatException, "Dependency " << dependency->name() << " requires at least two children.");
     if (storm::utility::isZero(dependency->probability())) {

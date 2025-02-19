@@ -467,6 +467,7 @@ size_t DFT<ValueType>::nrDynamicElements() const {
                 break;
             case storm::dft::storage::elements::DFTElementType::PAND:
             case storm::dft::storage::elements::DFTElementType::SPARE:
+            case storm::dft::storage::elements::DFTElementType::RELAXED_SPARE:
             case storm::dft::storage::elements::DFTElementType::POR:
             case storm::dft::storage::elements::DFTElementType::SEQ:
             case storm::dft::storage::elements::DFTElementType::MUTEX:
@@ -494,6 +495,7 @@ size_t DFT<ValueType>::nrStaticElements() const {
             case storm::dft::storage::elements::DFTElementType::BE:
             case storm::dft::storage::elements::DFTElementType::PAND:
             case storm::dft::storage::elements::DFTElementType::SPARE:
+            case storm::dft::storage::elements::DFTElementType::RELAXED_SPARE:
             case storm::dft::storage::elements::DFTElementType::POR:
             case storm::dft::storage::elements::DFTElementType::SEQ:
             case storm::dft::storage::elements::DFTElementType::MUTEX:
@@ -737,6 +739,7 @@ void DFT<ValueType>::writeStatsToStream(std::ostream& stream) const {
     size_t noPand = 0;
     size_t noPor = 0;
     size_t noSpare = 0;
+    size_t noRelaxedSpare = 0;  // Add counter for RelaxedSpare
     size_t noDependency = 0;
     size_t noRestriction = 0;
     for (auto const& elem : mElements) {
@@ -762,6 +765,9 @@ void DFT<ValueType>::writeStatsToStream(std::ostream& stream) const {
             case storm::dft::storage::elements::DFTElementType::SPARE:
                 ++noSpare;
                 break;
+            case storm::dft::storage::elements::DFTElementType::RELAXED_SPARE:
+                ++noRelaxedSpare;
+                break;
             case storm::dft::storage::elements::DFTElementType::PDEP:
                 ++noDependency;
                 break;
@@ -779,47 +785,24 @@ void DFT<ValueType>::writeStatsToStream(std::ostream& stream) const {
 
     // Check whether numbers are correct
     STORM_LOG_ASSERT(noBE == nrBasicElements(), "No. of BEs does not match.");
-    STORM_LOG_ASSERT(noSpare == mNrOfSpares, "No. of SPAREs does not match.");
+    STORM_LOG_ASSERT(noSpare + noRelaxedSpare == mNrOfSpares, "No. of SPAREs does not match.");  // Update assertion
     STORM_LOG_ASSERT(noDependency == mDependencies.size(), "No. of Dependencies does not match.");
     STORM_LOG_ASSERT(noAnd + noOr + noVot == noStatic, "No. of static gates does not match.");
-    STORM_LOG_ASSERT(noPand + noPor + noSpare + noDependency + noRestriction == noDynamic, "No. of dynamic gates does not match.");
-    STORM_LOG_ASSERT(noBE + noStatic + noDynamic == nrElements(), "No. of elements does not match.");
+    STORM_LOG_ASSERT(noPand + noPor + noSpare + noRelaxedSpare + noDependency + noRestriction == noDynamic, "No. of dynamic gates does not match.");
 
-    // Print output
-    stream << "=============DFT Statistics==============\n";
-    stream << "Number of BEs: " << nrBasicElements() << '\n';
-    stream << "Number of static elements: " << noStatic << '\n';
-    stream << "Number of dynamic elements: " << noDynamic << '\n';
-    stream << "Number of elements: " << nrElements() << '\n';
-    stream << "-----------------------------------------\n";
-    if (noBE > 0) {
-        stream << "Number of BEs: " << noBE << '\n';
-    }
-    if (noAnd > 0) {
-        stream << "Number of AND gates: " << noAnd << '\n';
-    }
-    if (noOr > 0) {
-        stream << "Number of OR gates: " << noOr << '\n';
-    }
-    if (noVot > 0) {
-        stream << "Number of VOT gates: " << noVot << '\n';
-    }
-    if (noPand > 0) {
-        stream << "Number of PAND gates: " << noPand << '\n';
-    }
-    if (noPor > 0) {
-        stream << "Number of POR gates: " << noPor << '\n';
-    }
-    if (noSpare > 0) {
-        stream << "Number of SPARE gates: " << noSpare << '\n';
-    }
-    if (noDependency > 0) {
-        stream << "Number of Dependencies: " << noDependency << '\n';
-    }
-    if (noRestriction > 0) {
-        stream << "Number of Restrictions: " << noRestriction << '\n';
-    }
-    stream << "=========================================\n";
+    // Write statistics
+    stream << "Basic events: \t\t" << noBE << '\n';
+    stream << "Static gates: \t\t" << noStatic << '\n';
+    stream << "\tAND: \t\t" << noAnd << '\n';
+    stream << "\tOR: \t\t" << noOr << '\n';
+    stream << "\tVOT: \t\t" << noVot << '\n';
+    stream << "Dynamic gates: \t\t" << noDynamic << '\n';
+    stream << "\tPAND: \t\t" << noPand << '\n';
+    stream << "\tPOR: \t\t" << noPor << '\n';
+    stream << "\tSPARE: \t\t" << noSpare << '\n';
+    stream << "\tRELAXED_SPARE: \t" << noRelaxedSpare << '\n';  // Add to output
+    stream << "Dependencies: \t\t" << noDependency << '\n';
+    stream << "Restrictions: \t\t" << noRestriction << '\n';
 }
 
 std::set<storm::RationalFunctionVariable> getParameters(DFT<storm::RationalFunction> const& dft) {

@@ -151,6 +151,13 @@ class DFTBuilder {
     void addSpareGate(std::string const& name, std::vector<std::string> const& children);
 
     /*!
+     * Create RELAXED-SPARE-gate and add it to DFT.
+     * @param name Name.
+     * @param children Names of children.
+     */
+    void addRelaxedSpareGate(std::string const& name, std::vector<std::string> const& children);
+
+    /*!
      * Create sequence enforcer (SEQ) and add it to DFT.
      * @param name Name.
      * @param children Names of children.

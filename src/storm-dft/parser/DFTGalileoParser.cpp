@@ -120,6 +120,8 @@ storm::dft::storage::DFT<ValueType> DFTGalileoParser<ValueType>::parseDFT(const 
                     builder.addPorGate(name, childNames, false);
                 } else if (type == "wsp" || type == "csp" || type == "hsp" || type == "spare") {
                     builder.addSpareGate(name, childNames);
+                } else if (type == "rsp") {
+                    builder.addRelaxedSpareGate(name, childNames);
                 } else if (type == "seq") {
                     builder.addSequenceEnforcer(name, childNames);
                 } else if (type == "mutex") {
