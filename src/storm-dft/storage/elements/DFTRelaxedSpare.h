@@ -33,16 +33,15 @@ class DFTRelaxedSpare : public DFTSpare<ValueType> {
     }
 
     void checkFails(storm::dft::storage::DFTState<ValueType>& state, storm::dft::storage::DFTStateSpaceGenerationQueues<ValueType>& queues) const override {
-        if (state.isOperational(this->id())) {
-            size_t uses = state.uses(this->id());
-            if (!state.isOperational(uses)) {
-                // Try to claim new spare - just like normal SPARE gate
-                bool claimingSuccessful = state.claimNew(this->id(), uses, this->children());
-                if (!claimingSuccessful) {
-                    this->fail(state, queues);
-                }
-            }
-        }
+        // Only log the check, but don't handle the failure propagation here
+        STORM_LOG_DEBUG("Checking relaxed spare.");
+        // Let the state generator handle the non-deterministic choice
+        return;
+    }
+
+    void fail(storm::dft::storage::DFTState<ValueType>& state, storm::dft::storage::DFTStateSpaceGenerationQueues<ValueType>& queues) const override {
+        // Use parent's fail behavior to ensure proper failure propagation
+        DFTSpare<ValueType>::fail(state, queues);
     }
 };
 
