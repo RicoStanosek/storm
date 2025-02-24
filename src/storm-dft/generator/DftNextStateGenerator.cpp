@@ -160,23 +160,19 @@ storm::generator::StateBehavior<ValueType, StateType> DftNextStateGenerator<Valu
             ValueType rate = this->state->getBERate(nextBE->id());
             if (hasRelaxedSpareParent) {
                 STORM_LOG_DEBUG("Found relaxed spare parent with name " << relaxedSpareParent->name() << " for BE " << nextBE->name() << " with rate " << rate);
-                // Create two choices for the relaxed spare
-                // Choice 1: Try claiming new spare
+
+                // Try claiming new spare
                 DFTStatePointer claimState = createSuccessorStateRelaxedSpare(this->state, relaxedSpareParent, true);
                 auto [claimStateId, claimShouldStop] = getNewStateId(claimState, stateToIdCallback);
-                if (!claimShouldStop) {
-                    storm::generator::Choice<ValueType, StateType> claimChoice(result.getNumberOfChoices(), false);
-                    claimChoice.addProbability(claimStateId, rate);
-                    result.addChoice(std::move(claimChoice));
-                }
 
-                // Choice 2: Don't claim spare and fail
+                // Don't claim spare and fail
                 DFTStatePointer failState = createSuccessorStateRelaxedSpare(this->state, relaxedSpareParent, false);
                 auto [failStateId, failShouldStop] = getNewStateId(failState, stateToIdCallback);
-                if (!failShouldStop) {
-                    storm::generator::Choice<ValueType, StateType> failChoice(result.getNumberOfChoices(), false);
-                    failChoice.addProbability(failStateId, rate);
-                    result.addChoice(std::move(failChoice));
+
+                if (!claimShouldStop && !failShouldStop) {
+                    choice.addProbability(claimStateId, rate);
+                    choice.addProbability(failStateId, rate);
+                    result.addChoice(std::move(choice));
                 }
             } else {
                 // Original code for normal BE failure
@@ -200,7 +196,7 @@ storm::generator::StateBehavior<ValueType, StateType> DftNextStateGenerator<Valu
         if (choice.size() > 0) {
             result.addChoice(std::move(choice));
         }
-        
+
         // Add self loop only if no transitions were generated at all
         if (result.empty()) {
             // No transition was generated
@@ -313,7 +309,7 @@ typename DftNextStateGenerator<ValueType, StateType>::DFTStatePointer DftNextSta
     storm::dft::storage::DFTStateSpaceGenerationQueues<ValueType> queues;
 
     size_t uses = origState->uses(relaxedSpare->id());
-    
+
     // First, ensure the current BE is marked as failed
     if (uses < relaxedSpare->children().size()) {
         auto currentChild = std::static_pointer_cast<storm::dft::storage::elements::DFTBE<ValueType>>(relaxedSpare->children()[uses]);
