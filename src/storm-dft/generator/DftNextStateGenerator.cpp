@@ -160,7 +160,6 @@ storm::generator::StateBehavior<ValueType, StateType> DftNextStateGenerator<Valu
             ValueType rate = this->state->getBERate(nextBE->id());
             if (hasRelaxedSpareParent) {
                 STORM_LOG_DEBUG("Found relaxed spare parent with name " << relaxedSpareParent->name() << " for BE " << nextBE->name() << " with rate " << rate);
-
                 // Try claiming new spare
                 DFTStatePointer claimState = createSuccessorStateRelaxedSpare(this->state, relaxedSpareParent, true);
                 auto [claimStateId, claimShouldStop] = getNewStateId(claimState, stateToIdCallback);
@@ -170,9 +169,17 @@ storm::generator::StateBehavior<ValueType, StateType> DftNextStateGenerator<Valu
                 auto [failStateId, failShouldStop] = getNewStateId(failState, stateToIdCallback);
 
                 if (!claimShouldStop && !failShouldStop) {
-                    choice.addProbability(claimStateId, rate);
-                    choice.addProbability(failStateId, rate);
-                    result.addChoice(std::move(choice));
+                    // For non-Markovian choices, the probability must be 1.0 for each choice
+
+                    // Choice 1: Try claiming a new spare
+                    storm::generator::Choice<ValueType, StateType> claimChoice(0, false);        // Setting Markovian to false for non-deterministic choice
+                    claimChoice.addProbability(claimStateId, storm::utility::one<ValueType>());  // Use 1.0 instead of rate
+                    result.addChoice(std::move(claimChoice));
+
+                    // Choice 2: Don't claim and stay failed
+                    storm::generator::Choice<ValueType, StateType> failChoice(1, false);       // Different action index, Markovian=false
+                    failChoice.addProbability(failStateId, storm::utility::one<ValueType>());  // Use 1.0 instead of rate
+                    result.addChoice(std::move(failChoice));
                 }
             } else {
                 // Original code for normal BE failure
