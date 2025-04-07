@@ -9,7 +9,7 @@ namespace elements {
 /*!
  * Element types in a DFT.
  */
-enum class DFTElementType { BE, AND, OR, VOT, PAND, POR, SPARE, PDEP, SEQ, MUTEX };
+enum class DFTElementType { BE, AND, OR, VOT, PAND, POR, SPARE, RELAXED_SPARE, PDEP, SEQ, MUTEX };
 
 /*!
  * BE types in a DFT.
@@ -32,6 +32,8 @@ inline std::string toString(DFTElementType const& type) {
             return "POR";
         case DFTElementType::SPARE:
             return "SPARE";
+        case DFTElementType::RELAXED_SPARE:
+            return "RELAXED_SPARE";
         case DFTElementType::PDEP:
             return "PDEP";
         case DFTElementType::SEQ:

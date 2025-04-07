@@ -37,6 +37,7 @@ ipch/
 obj/
 CMakeFiles/
 CPackConfig.cmake
+CMakeCache.txt
 # The build Dir
 /*build*/
 build//CMakeLists.txt

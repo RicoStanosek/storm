@@ -2,6 +2,7 @@
 
 #include <map>
 
+#include "storm-dft/storage/elements/DFTElementType.h"
 #include "storm/exceptions/InvalidArgumentException.h"
 #include "storm/exceptions/NotSupportedException.h"
 #include "storm/exceptions/WrongFormatException.h"
@@ -459,6 +460,7 @@ size_t DFT<ValueType>::nrDynamicElements() const {
                 break;
             case storm::dft::storage::elements::DFTElementType::PAND:
             case storm::dft::storage::elements::DFTElementType::SPARE:
+            case storm::dft::storage::elements::DFTElementType::RELAXED_SPARE:
             case storm::dft::storage::elements::DFTElementType::POR:
             case storm::dft::storage::elements::DFTElementType::SEQ:
             case storm::dft::storage::elements::DFTElementType::MUTEX:
@@ -486,6 +488,7 @@ size_t DFT<ValueType>::nrStaticElements() const {
             case storm::dft::storage::elements::DFTElementType::BE:
             case storm::dft::storage::elements::DFTElementType::PAND:
             case storm::dft::storage::elements::DFTElementType::SPARE:
+            case storm::dft::storage::elements::DFTElementType::RELAXED_SPARE:
             case storm::dft::storage::elements::DFTElementType::POR:
             case storm::dft::storage::elements::DFTElementType::SEQ:
             case storm::dft::storage::elements::DFTElementType::MUTEX:
@@ -622,7 +625,19 @@ std::vector<size_t> DFT<ValueType>::immediateFailureCauses(size_t index) const {
 
 template<typename ValueType>
 bool DFT<ValueType>::canHaveNondeterminism() const {
-    return !getDependencies().empty();
+    // Check for dependencies
+    if (!getDependencies().empty()) {
+        return true;
+    }
+
+    // Check for relaxed SPAREs
+    for (auto const& elem : mElements) {
+        if (elem->type() == storm::dft::storage::elements::DFTElementType::RELAXED_SPARE) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 template<typename ValueType>
@@ -729,6 +744,7 @@ void DFT<ValueType>::writeStatsToStream(std::ostream& stream) const {
     size_t noPand = 0;
     size_t noPor = 0;
     size_t noSpare = 0;
+    size_t noRelaxedSpare = 0;  // Add counter for RelaxedSpare
     size_t noDependency = 0;
     size_t noRestriction = 0;
     for (auto const& elem : mElements) {
@@ -754,6 +770,9 @@ void DFT<ValueType>::writeStatsToStream(std::ostream& stream) const {
             case storm::dft::storage::elements::DFTElementType::SPARE:
                 ++noSpare;
                 break;
+            case storm::dft::storage::elements::DFTElementType::RELAXED_SPARE:
+                ++noRelaxedSpare;
+                break;
             case storm::dft::storage::elements::DFTElementType::PDEP:
                 ++noDependency;
                 break;
@@ -774,7 +793,7 @@ void DFT<ValueType>::writeStatsToStream(std::ostream& stream) const {
     STORM_LOG_ASSERT(noSpare == mNrOfSpares, "No. of SPAREs does not match.");
     STORM_LOG_ASSERT(noDependency == mDependencies.size(), "No. of Dependencies does not match.");
     STORM_LOG_ASSERT(noAnd + noOr + noVot == noStatic, "No. of static gates does not match.");
-    STORM_LOG_ASSERT(noPand + noPor + noSpare + noDependency + noRestriction == noDynamic, "No. of dynamic gates does not match.");
+    STORM_LOG_ASSERT(noPand + noPor + noSpare + noRelaxedSpare + noDependency + noRestriction == noDynamic, "No. of dynamic gates does not match.");
     STORM_LOG_ASSERT(noBE + noStatic + noDynamic == nrElements(), "No. of elements does not match.");
 
     // Print output
@@ -804,6 +823,9 @@ void DFT<ValueType>::writeStatsToStream(std::ostream& stream) const {
     }
     if (noSpare > 0) {
         stream << "Number of SPARE gates: " << noSpare << '\n';
+    }
+    if (noRelaxedSpare > 0) {
+        stream << "Number of RELAXED_SPARE gates: " << noRelaxedSpare << '\n';
     }
     if (noDependency > 0) {
         stream << "Number of Dependencies: " << noDependency << '\n';

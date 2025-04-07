@@ -15,6 +15,7 @@
 #include "DFTPand.h"
 #include "DFTPor.h"
 #include "DFTSpare.h"
+#include "DFTRelaxedSpare.h"
 #include "DFTVot.h"
 
 #include "DFTDependency.h"
