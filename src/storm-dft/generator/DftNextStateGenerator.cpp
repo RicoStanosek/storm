@@ -321,7 +321,7 @@ typename DftNextStateGenerator<ValueType, StateType>::DFTStatePointer DftNextSta
     // First, ensure the current BE is marked as failed
     if (uses < relaxedSpare->children().size()) {
         auto currentChild = std::static_pointer_cast<storm::dft::storage::elements::DFTBE<ValueType>>(relaxedSpare->children()[uses]);
-        newState->letBEFail(currentChild);
+        // newState->letBEFail(currentChild);
     }
 
     if (tryClaimingSpare) {
