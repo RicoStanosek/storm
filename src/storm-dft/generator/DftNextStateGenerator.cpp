@@ -65,7 +65,50 @@ void DftNextStateGenerator<ValueType, StateType>::load(DFTStatePointer const& st
 template<typename ValueType, typename StateType>
 storm::generator::StateBehavior<ValueType, StateType> DftNextStateGenerator<ValueType, StateType>::expand(StateToIdCallback const& stateToIdCallback) {
     STORM_LOG_DEBUG("Explore state: " << mDft.getStateString(state));
-    // Initialization
+
+    // Check if this state has a failed BE that is a child of a relaxed spare gate
+    // If so, we need to create non-deterministic choices for the relaxed spare gate
+    for (size_t i = 0; i < mDft.nrElements(); ++i) {
+        if (mDft.isBasicElement(i) && this->state->hasFailed(i)) {
+            auto be = mDft.getBasicElement(i);
+
+            // Check if any parent is a RELAXED_SPARE gate with this BE as currently used child
+            for (auto const& parent : be->parents()) {
+                if (parent->type() == storm::dft::storage::elements::DFTElementType::RELAXED_SPARE && this->state->uses(parent->id()) == be->id()) {
+                    auto relaxedSpare = std::static_pointer_cast<storm::dft::storage::elements::DFTRelaxedSpare<ValueType> const>(parent);
+                    STORM_LOG_DEBUG("Found relaxed spare parent with name " << relaxedSpare->name() << " for failed BE " << be->name());
+
+                    // Create non-deterministic choices
+                    storm::generator::StateBehavior<ValueType, StateType> result;
+
+                    // Try claiming new spare
+                    DFTStatePointer claimState = createSuccessorStateRelaxedSpare(this->state, relaxedSpare, true);
+                    auto [claimStateId, claimShouldStop] = getNewStateId(claimState, stateToIdCallback);
+
+                    // Don't claim spare and fail
+                    DFTStatePointer failState = createSuccessorStateRelaxedSpare(this->state, relaxedSpare, false);
+                    auto [failStateId, failShouldStop] = getNewStateId(failState, stateToIdCallback);
+
+                    if (!claimShouldStop && !failShouldStop) {
+                        // Choice 1: Try claiming a new spare
+                        storm::generator::Choice<ValueType, StateType> claimChoice(0, false);  // Setting Markovian to false for non-deterministic choice
+                        claimChoice.addProbability(claimStateId, storm::utility::one<ValueType>());
+                        result.addChoice(std::move(claimChoice));
+
+                        // Choice 2: Don't claim and stay failed
+                        storm::generator::Choice<ValueType, StateType> failChoice(1, false);  // Different action index, Markovian=false
+                        failChoice.addProbability(failStateId, storm::utility::one<ValueType>());
+                        result.addChoice(std::move(failChoice));
+
+                        result.setExpanded();
+                        return result;
+                    }
+                }
+            }
+        }
+    }
+
+    // If no relaxed spare gate was found, proceed with normal exploration
     bool hasDependencies = this->state->getFailableElements().hasDependencies();
     return exploreState(stateToIdCallback, hasDependencies, mTakeFirstDependency);
 }
@@ -147,48 +190,13 @@ storm::generator::StateBehavior<ValueType, StateType> DftNextStateGenerator<Valu
             // Next failure due to BE failing on its own
             std::shared_ptr<storm::dft::storage::elements::DFTBE<ValueType> const> nextBE = iterFailable.asBE(mDft);
 
-            // Check if any parent is a RELAXED_SPARE gate with this BE as currently used child
-            bool hasRelaxedSpareParent = false;
-            std::shared_ptr<storm::dft::storage::elements::DFTRelaxedSpare<ValueType> const> relaxedSpareParent = nullptr;
-            for (auto const& parent : nextBE->parents()) {
-                if (parent->type() == storm::dft::storage::elements::DFTElementType::RELAXED_SPARE && this->state->uses(parent->id()) == nextBE->id()) {
-                    hasRelaxedSpareParent = true;
-                    relaxedSpareParent = std::static_pointer_cast<storm::dft::storage::elements::DFTRelaxedSpare<ValueType> const>(parent);
-                    break;
-                }
-            }
-
+            // For all BE failures, use the normal mechanism
+            // The non-deterministic choices for relaxed spare gates will be handled in the expand method
             ValueType rate = this->state->getBERate(nextBE->id());
-            if (hasRelaxedSpareParent) {
-                STORM_LOG_DEBUG("Found relaxed spare parent with name " << relaxedSpareParent->name() << " for BE " << nextBE->name() << " with rate " << rate);
-                // Try claiming new spare
-                DFTStatePointer claimState = createSuccessorStateRelaxedSpare(this->state, relaxedSpareParent, true);
-                auto [claimStateId, claimShouldStop] = getNewStateId(claimState, stateToIdCallback);
-
-                // Don't claim spare and fail
-                DFTStatePointer failState = createSuccessorStateRelaxedSpare(this->state, relaxedSpareParent, false);
-                auto [failStateId, failShouldStop] = getNewStateId(failState, stateToIdCallback);
-
-                if (!claimShouldStop && !failShouldStop) {
-                    // For non-Markovian choices, the probability must be 1.0 for each choice
-
-                    // Choice 1: Try claiming a new spare
-                    storm::generator::Choice<ValueType, StateType> claimChoice(0, false);        // Setting Markovian to false for non-deterministic choice
-                    claimChoice.addProbability(claimStateId, storm::utility::one<ValueType>());  // Use 1.0 instead of rate
-                    result.addChoice(std::move(claimChoice));
-
-                    // Choice 2: Don't claim and stay failed
-                    storm::generator::Choice<ValueType, StateType> failChoice(1, false);       // Different action index, Markovian=false
-                    failChoice.addProbability(failStateId, storm::utility::one<ValueType>());  // Use 1.0 instead of rate
-                    result.addChoice(std::move(failChoice));
-                }
-            } else {
-                // Original code for normal BE failure
-                DFTStatePointer newState = createSuccessorState(this->state, nextBE);
-                auto [newStateId, shouldStop] = getNewStateId(newState, stateToIdCallback);
-                if (!shouldStop) {
-                    choice.addProbability(newStateId, rate);
-                }
+            DFTStatePointer newState = createSuccessorState(this->state, nextBE);
+            auto [newStateId, shouldStop] = getNewStateId(newState, stateToIdCallback);
+            if (!shouldStop) {
+                choice.addProbability(newStateId, rate);
             }
         }
 
@@ -318,21 +326,28 @@ typename DftNextStateGenerator<ValueType, StateType>::DFTStatePointer DftNextSta
 
     size_t uses = origState->uses(relaxedSpare->id());
 
-    // First, ensure the current BE is marked as failed
+    // Verify that the current BE is marked as failed
     if (uses < relaxedSpare->children().size()) {
         auto currentChild = std::static_pointer_cast<storm::dft::storage::elements::DFTBE<ValueType>>(relaxedSpare->children()[uses]);
-        // newState->letBEFail(currentChild);
+        // The BE should already be failed at this point, as this method is called after the BE fails
+        STORM_LOG_ASSERT(newState->hasFailed(currentChild->id()),
+                         "Current child " << currentChild->name() << " of relaxed spare " << relaxedSpare->name() << " is not failed");
     }
+
+    STORM_LOG_DEBUG("Creating successor state for relaxed spare " << relaxedSpare->name() << " with tryClaimingSpare=" << tryClaimingSpare);
 
     if (tryClaimingSpare) {
         // Try claiming a new spare
         bool claimingSuccessful = newState->claimNew(relaxedSpare->id(), uses, relaxedSpare->children());
+        STORM_LOG_DEBUG("Claiming new spare was " << (claimingSuccessful ? "successful" : "unsuccessful"));
+
         if (!claimingSuccessful) {
             // If claiming fails, mark the spare as failed
             relaxedSpare->fail(*newState, queues);
         }
     } else {
         // Directly fail without trying to claim new spare
+        STORM_LOG_DEBUG("Not attempting to claim new spare, directly failing relaxed spare " << relaxedSpare->name());
         relaxedSpare->fail(*newState, queues);
     }
 
@@ -347,12 +362,16 @@ typename DftNextStateGenerator<ValueType, StateType>::DFTStatePointer DftNextSta
     while (!queues.failurePropagationDone()) {
         DFTGatePointer next = queues.nextFailurePropagation();
         next->checkFails(*newState, queues);
+        newState->updateFailableDependencies(next->id());
+        newState->updateFailableInRestrictions(next->id());
     }
 
     // Process all restriction checks
     while (!queues.restrictionChecksDone()) {
         DFTRestrictionPointer next = queues.nextRestrictionCheck();
         next->checkFails(*newState, queues);
+        newState->updateFailableDependencies(next->id());
+        newState->updateFailableInRestrictions(next->id());
     }
 
     // Process failsafe propagation
