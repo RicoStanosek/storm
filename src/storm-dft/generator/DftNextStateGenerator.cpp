@@ -351,10 +351,12 @@ typename DftNextStateGenerator<ValueType, StateType>::DFTStatePointer DftNextSta
         relaxedSpare->fail(*newState, queues);
     }
 
-    // Propagate failure to parents
-    for (DFTGatePointer parent : relaxedSpare->parents()) {
-        if (newState->isOperational(parent->id())) {
-            queues.propagateFailure(parent);
+    // Propagate failure to parents only if the relaxedSpare itself has failed in the newState
+    if (newState->hasFailed(relaxedSpare->id())) {
+        for (DFTGatePointer parent : relaxedSpare->parents()) {
+            if (newState->isOperational(parent->id())) {
+                queues.propagateFailure(parent);
+            }
         }
     }
 
