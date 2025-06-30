@@ -93,11 +93,13 @@ storm::generator::StateBehavior<ValueType, StateType> DftNextStateGenerator<Valu
                         // Choice 1: Try claiming a new spare
                         storm::generator::Choice<ValueType, StateType> claimChoice(0, false);  // Setting Markovian to false for non-deterministic choice
                         claimChoice.addProbability(claimStateId, storm::utility::one<ValueType>());
+                        claimChoice.addLabel("try_claim");
                         result.addChoice(std::move(claimChoice));
 
                         // Choice 2: Don't claim and stay failed
                         storm::generator::Choice<ValueType, StateType> failChoice(1, false);  // Different action index, Markovian=false
                         failChoice.addProbability(failStateId, storm::utility::one<ValueType>());
+                        failChoice.addLabel("stay_failed");
                         result.addChoice(std::move(failChoice));
 
                         result.setExpanded();
@@ -324,21 +326,20 @@ typename DftNextStateGenerator<ValueType, StateType>::DFTStatePointer DftNextSta
     // Create queues object that will be used for propagation
     storm::dft::storage::DFTStateSpaceGenerationQueues<ValueType> queues;
 
-    size_t uses = origState->uses(relaxedSpare->id());
+    size_t usedChildId = origState->uses(relaxedSpare->id());
 
     // Verify that the current BE is marked as failed
-    if (uses < relaxedSpare->children().size()) {
-        auto currentChild = std::static_pointer_cast<storm::dft::storage::elements::DFTBE<ValueType>>(relaxedSpare->children()[uses]);
-        // The BE should already be failed at this point, as this method is called after the BE fails
-        STORM_LOG_ASSERT(newState->hasFailed(currentChild->id()),
-                         "Current child " << currentChild->name() << " of relaxed spare " << relaxedSpare->name() << " is not failed");
+    if (usedChildId != relaxedSpare->id()) {
+        // usedChildId != relaxedSpare->id() means the spare hasn't failed yet and is using a child
+        // We need to verify that this child has actually failed
+        STORM_LOG_ASSERT(newState->hasFailed(usedChildId), "Current child " << usedChildId << " of relaxed spare " << relaxedSpare->name() << " is not failed");
     }
 
     STORM_LOG_DEBUG("Creating successor state for relaxed spare " << relaxedSpare->name() << " with tryClaimingSpare=" << tryClaimingSpare);
 
     if (tryClaimingSpare) {
         // Try claiming a new spare
-        bool claimingSuccessful = newState->claimNew(relaxedSpare->id(), uses, relaxedSpare->children());
+        bool claimingSuccessful = newState->claimNew(relaxedSpare->id(), usedChildId, relaxedSpare->children());
         STORM_LOG_DEBUG("Claiming new spare was " << (claimingSuccessful ? "successful" : "unsuccessful"));
 
         if (!claimingSuccessful) {
