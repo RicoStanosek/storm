@@ -11,8 +11,9 @@ export CC="$LLVM_BIN/clang"
 export CXX="$LLVM_BIN/clang++"
 export PATH="$LLVM_BIN:$PATH"
 
-# Default: do not clean
+# Default settings
 CLEAN_REBUILD=0
+DEBUG_BUILD=0
 
 # Parse arguments
 for arg in "$@"; do
@@ -20,9 +21,12 @@ for arg in "$@"; do
     --clean-rebuild)
       CLEAN_REBUILD=1
       ;;
+    --debug)
+      DEBUG_BUILD=1
+      ;;
     *)
       echo "Unknown argument: $arg"
-      echo "Usage: $0 [--clean-rebuild]"
+      echo "Usage: $0 [--clean-rebuild] [--debug]"
       exit 1
       ;;
   esac
@@ -39,15 +43,29 @@ cd "$BUILD_DIR"
 
 # Run cmake if needed (if no CMakeCache.txt or after clean)
 if [[ ! -f "CMakeCache.txt" || $CLEAN_REBUILD -eq 1 ]]; then
-  cmake \
-    -DCMAKE_BUILD_TYPE=Debug \
-    -DSTORM_DEVELOPER=ON \
-    -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
-    -DCMAKE_OSX_SYSROOT="$(xcrun --show-sdk-path)" \
-    -DCMAKE_C_COMPILER="$CC" \
-    -DCMAKE_CXX_COMPILER="$CXX" \
-    -DCMAKE_CXX_FLAGS_DEBUG="-g -Wno-missing-template-arg-list-after-template-kw" \
-    "$SRC_DIR"
+  # Base cmake arguments
+  CMAKE_ARGS=(
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=1
+    -DCMAKE_OSX_SYSROOT="$(xcrun --show-sdk-path)"
+    -DCMAKE_C_COMPILER="$CC"
+    -DCMAKE_CXX_COMPILER="$CXX"
+    -DCMAKE_CXX_FLAGS="-Wno-missing-template-arg-list-after-template-kw"
+  )
+  
+  # Add debug-specific arguments if debug flag is set
+  if [[ $DEBUG_BUILD -eq 1 ]]; then
+    CMAKE_ARGS+=(
+      -DCMAKE_BUILD_TYPE=Debug
+      -DSTORM_DEVELOPER=ON
+      -DCMAKE_CXX_FLAGS_DEBUG="-g"
+    )
+  else
+    CMAKE_ARGS+=(
+      -DCMAKE_BUILD_TYPE=Release
+    )
+  fi
+  
+  cmake "${CMAKE_ARGS[@]}" "$SRC_DIR"
 fi
 
 # Build with all cores
