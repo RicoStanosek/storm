@@ -97,6 +97,7 @@ typename DftJsonExporter<ValueType>::Json DftJsonExporter<ValueType>::translateE
             case storm::dft::storage::elements::DFTElementType::AND:
             case storm::dft::storage::elements::DFTElementType::OR:
             case storm::dft::storage::elements::DFTElementType::SPARE:
+            case storm::dft::storage::elements::DFTElementType::RELAXED_SPARE:
             case storm::dft::storage::elements::DFTElementType::SEQ:
             case storm::dft::storage::elements::DFTElementType::MUTEX:
                 // No additional parameters
