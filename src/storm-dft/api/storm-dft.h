@@ -32,6 +32,17 @@ std::shared_ptr<storm::dft::storage::DFT<ValueType>> loadDFTGalileoFile(std::str
 }
 
 /*!
+ * Load DFT from Galileo string.
+ *
+ * @param content String containing DFT description in Galileo format.
+ * @return DFT.
+ */
+template<typename ValueType>
+std::shared_ptr<storm::dft::storage::DFT<ValueType>> loadDFTGalileoString(std::string const& content) {
+    return std::make_shared<storm::dft::storage::DFT<ValueType>>(storm::dft::parser::DFTGalileoParser<ValueType>::parseGalileoFromString(content));
+}
+
+/*!
  * Load DFT from JSON string.
  *
  * @param jsonString String containing DFT description in JSON format.

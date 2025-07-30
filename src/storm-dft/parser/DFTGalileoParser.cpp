@@ -4,6 +4,7 @@
 #include <boost/algorithm/string/replace.hpp>
 #include <optional>
 #include <regex>
+#include <sstream>
 
 #include "storm/exceptions/FileIoException.h"
 #include "storm/exceptions/NotSupportedException.h"
@@ -16,21 +17,45 @@ namespace parser {
 
 template<typename ValueType>
 storm::dft::storage::DFT<ValueType> DFTGalileoParser<ValueType>::parseDFT(const std::string& filename) {
+    std::ifstream file;
+    storm::utility::openFile(filename, file);
+
+    std::vector<std::string> lines;
+    std::string line;
+    while (storm::utility::getline(file, line)) {
+        lines.push_back(line);
+    }
+    storm::utility::closeFile(file);
+
+    return parseGalileoFromLines(lines.begin(), lines.end());
+}
+
+template<typename ValueType>
+storm::dft::storage::DFT<ValueType> DFTGalileoParser<ValueType>::parseGalileoFromString(const std::string& content) {
+    std::vector<std::string> lines;
+    std::stringstream ss(content);
+    std::string line;
+    while (std::getline(ss, line)) {
+        lines.push_back(line);
+    }
+    return parseGalileoFromLines(lines.begin(), lines.end());
+}
+
+template<typename ValueType>
+template<typename LineIterator>
+storm::dft::storage::DFT<ValueType> DFTGalileoParser<ValueType>::parseGalileoFromLines(LineIterator begin, LineIterator end) {
     storm::dft::builder::DFTBuilder<ValueType> builder;
     storm::parser::ValueParser<ValueType> valueParser;
     // Regular expression to detect comments
     // taken from: https://stackoverflow.com/questions/9449887/removing-c-c-style-comments-using-boostregex
     const std::regex commentRegex("(/\\*([^*]|(\\*+[^*/]))*\\*+/)|(//.*)");
 
-    std::ifstream file;
-    storm::utility::openFile(filename, file);
-
-    std::string line;
     size_t lineNo = 0;
     std::string toplevelId = "";
     bool comment = false;  // Indicates whether the current line is part of a multiline comment
     try {
-        while (storm::utility::getline(file, line)) {
+        for (auto it = begin; it != end; ++it) {
+            std::string line = *it;
             ++lineNo;
             // First consider comments
             if (comment) {
@@ -149,7 +174,6 @@ storm::dft::storage::DFT<ValueType> DFTGalileoParser<ValueType>::parseDFT(const 
         STORM_LOG_THROW(false, storm::exceptions::FileIoException, "A parsing exception occurred in line " << lineNo << ": " << exception.what());
     }
     builder.setTopLevel(toplevelId);
-    storm::utility::closeFile(file);
 
     // Build DFT
     storm::dft::storage::DFT<ValueType> dft = builder.build();

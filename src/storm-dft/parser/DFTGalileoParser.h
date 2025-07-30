@@ -27,7 +27,26 @@ class DFTGalileoParser {
      */
     static storm::dft::storage::DFT<ValueType> parseDFT(std::string const& filename);
 
+    /*!
+     * Parse DFT in Galileo format from string and build DFT.
+     *
+     * @param content Galileo format content as string.
+     *
+     * @return DFT.
+     */
+    static storm::dft::storage::DFT<ValueType> parseGalileoFromString(std::string const& content);
+
    private:
+    /*!
+     * Core parsing logic that works on a range of lines.
+     *
+     * @param lines Iterator range of lines to parse.
+     *
+     * @return DFT.
+     */
+    template<typename LineIterator>
+    static storm::dft::storage::DFT<ValueType> parseGalileoFromLines(LineIterator begin, LineIterator end);
+
     /*!
      * Parse element name (strip quotation marks, etc.).
      *

@@ -108,4 +108,19 @@ TEST(DftParserTest, LoadParametricFromJsonFile) {
     auto it = std::find_if(parameters.begin(), parameters.end(), [](storm::RationalFunctionVariable const& x) { return x.name() == "x"; });
     EXPECT_TRUE(it != parameters.end());
 }
+
+TEST(DftParserTest, LoadFromGalileoString) {
+    std::string galileoContent = R"(
+        toplevel "system";
+        "system" and "comp1" "comp2";
+        "comp1" lambda=0.01;
+        "comp2" lambda=0.02;
+    )";
+    
+    std::shared_ptr<storm::dft::storage::DFT<double>> dft = storm::dft::api::loadDFTGalileoString<double>(galileoContent);
+    EXPECT_EQ(3ul, dft->nrElements());
+    EXPECT_EQ(2ul, dft->nrBasicElements());
+    EXPECT_TRUE(storm::dft::api::isWellFormed(*dft).first);
+    EXPECT_EQ("system", dft->getTopLevelElement()->name());
+}
 }  // namespace
