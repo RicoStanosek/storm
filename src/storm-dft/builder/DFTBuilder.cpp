@@ -331,6 +331,7 @@ void DFTBuilder<ValueType>::cloneElement(DFTElementCPointer element) {
         case storm::dft::storage::elements::DFTElementType::PAND:
         case storm::dft::storage::elements::DFTElementType::POR:
         case storm::dft::storage::elements::DFTElementType::SPARE:
+        case storm::dft::storage::elements::DFTElementType::RELAXED_SPARE:
         case storm::dft::storage::elements::DFTElementType::SEQ:
         case storm::dft::storage::elements::DFTElementType::MUTEX: {
             auto elemWithChildren = std::static_pointer_cast<storm::dft::storage::elements::DFTChildren<ValueType> const>(element);
@@ -365,6 +366,7 @@ void DFTBuilder<ValueType>::cloneElementWithNewChildren(DFTChildrenCPointer elem
         case storm::dft::storage::elements::DFTElementType::PAND:
         case storm::dft::storage::elements::DFTElementType::POR:
         case storm::dft::storage::elements::DFTElementType::SPARE:
+        case storm::dft::storage::elements::DFTElementType::RELAXED_SPARE:
             addGate(std::static_pointer_cast<storm::dft::storage::elements::DFTGate<ValueType>>(elemWithChildren->clone()), children);
             break;
         case storm::dft::storage::elements::DFTElementType::SEQ:
